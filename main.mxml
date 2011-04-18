@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application name="SurveyReel"
+  xmlns:mx="http://www.adobe.com/2006/mxml"
+  layout="vertical"
+  verticalAlign="middle"
+  backgroundColor="white">
+ 
+  <mx:Script>
+    <![CDATA[
+      import mx.controls.Alert;
+
+      public var nc:NetConnection;
+      public var ns:NetStream;
+      public var camera:Camera;
+      public var mic:Microphone;
+      public var nsOutGoing:NetStream;
+      public var server:String = "rtmp://localhost:5080/oflaDemo/test/";
+     
+      private function videoDisplay_creationComplete() :void
+      {
+        nc = new NetConnection();
+        nc.addEventListener(NetStatusEvent.NET_STATUS, netStatusHandler, false, 0, true);
+        nc.connect(server);
+      }
+     
+      private function netStatusHandler(event:NetStatusEvent) :void
+      {
+        switch (event.info.code) {
+          case "NetConnection.Connect.Failed":
+            Alert.show("ERROR: Could not connect to: " + server);
+            break;
+          case "NetConnection.Connect.Success":
+            //Alert.show("SUCCESS: Connected to: " + server);
+            prepareStreams();
+            break;
+          default:
+            Alert.show("ERROR: Could not connect to: " + server);
+            nc.close();
+            break;
+        }
+      }
+
+      private function prepareStreams() :void
+      {
+        nsOutGoing = new NetStream(nc);
+       
+        camera = Camera.getCamera();
+        if (camera != null) {
+          if (camera.muted) {
+            Security.showSettings(SecurityPanel.DEFAULT);
+          }
+         
+          camera.setMode(176, 144, 15);
+          camera.setKeyFrameInterval(10);
+          camera.setQuality(0, 70);
+         
+          videoDisplay.attachCamera(camera);
+          nsOutGoing.attachCamera(camera);
+        }
+       
+        mic = Microphone.getMicrophone(0);
+        if (mic != null) {
+          mic.rate = 22;
+          nsOutGoing.attachAudio(mic);
+        }   
+      }
+     
+      private function startRecord() :void
+      {
+        nsOutGoing.publish("test", "record");
+      }
+     
+      private function stopRecord() :void
+      {
+        nsOutGoing.close();
+      }
+    ]]>
+  </mx:Script>
+
+  <mx:VideoDisplay id="videoDisplay"
+    creationComplete="videoDisplay_creationComplete();"
+    width="400"
+    height="300" />
+   
+  <mx:Button id="start" label="Start" click="startRecord();" />
+ 
+  <mx:Button id="stop" label="Stop" click="stopRecord();" />
+ 
+</mx:Application>
