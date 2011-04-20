@@ -24,14 +24,12 @@
       public var nsInComing:NetStream;
       public var nsOutGoing:NetStream;
       public var server:String = "rtmp://192.168.2.5/oflaDemo/test/";
-      public var backend:String = "http://192.168.2.5/getquestion.php";
+      public var backend:String = "http://192.168.2.5/";
       public var recording:Boolean = false;
       public var currentQuestionNum:int;
+      public var surveyId:int;
+      public var userId:int;
 
-      public var userId:String = "MikhilMasli";
-
-      public var urlLoader:URLLoader;
-     
       private function videoDisplay_creationComplete() :void
       {
         // Setup the NetConnection for streaming.
@@ -40,28 +38,81 @@
                                  this.netStatusHandler, false, 0, true);
         this.nc.connect(this.server);
 
-        // Setup the URLLoader for AJAX access.
-        this.urlLoader = new URLLoader();
-        this.urlLoader.dataFormat = URLLoaderDataFormat.VARIABLES;
-        this.urlLoader.addEventListener(Event.COMPLETE, this.questionReceived);
+        // Fetch survey details.
+        this.getSurveyDetails();
+      }
+
+      private function startSurvey() :void
+      {
+        this.question.text = "";
+        this.startbox.visible = false;
+        this.recorder.visible = true;
 
         // Fetch the first question.
         this.currentQuestionNum = 0;
         this.getNextQuestion();
       }
 
-      private function getNextQuestion() :void
+      private function finishSurvey() :void
       {
+        this.nsOutGoing.close();
+
+        this.question.text = "";
+        this.recorder.visible = false;
+        this.previewer.visible = false;
+        this.finished.visible = true;
+      }
+
+      private function getSurveyDetails() :void
+      {
+        var url_part:String = "test"; //FIXME: Read from URL.
+
+        var urlLoader:URLLoader = new URLLoader();
+        urlLoader.dataFormat = URLLoaderDataFormat.VARIABLES;
+        urlLoader.addEventListener(Event.COMPLETE, this.surveyDetailsReceived);
+
         var variables:URLVariables = new URLVariables();
-        variables.q = 1 + this.currentQuestionNum;
+        variables.survey_url_part = url_part;
 
         var req:URLRequest = new URLRequest();
-        req.url = this.backend;
+        req.url = this.backend + "getsurvey.php";
         req.method = URLRequestMethod.GET;
         req.data = variables;
 
         try {
-          this.urlLoader.load(req);
+          urlLoader.load(req);
+        } catch (error:Error) {
+          Alert.show("ERROR: Could not talk to backend at: " + this.backend);
+        }
+      }
+
+      private function surveyDetailsReceived(event:Event) :void
+      {
+        this.surveyId = event.target.data.id;
+        this.userId = event.target.data.user_id;
+        this.surveyTitle.text = event.target.data.title;
+        this.surveyDescription.text = event.target.data.description;
+
+        this.startbox.visible = true;
+      }
+
+      private function getNextQuestion() :void
+      {
+        var urlLoader:URLLoader = new URLLoader();
+        urlLoader.dataFormat = URLLoaderDataFormat.VARIABLES;
+        urlLoader.addEventListener(Event.COMPLETE, this.questionReceived);
+
+        var variables:URLVariables = new URLVariables();
+        variables.seq = 1 + this.currentQuestionNum;
+        variables.survey_id = this.surveyId;
+
+        var req:URLRequest = new URLRequest();
+        req.url = this.backend + "getquestion.php";
+        req.method = URLRequestMethod.GET;
+        req.data = variables;
+
+        try {
+          urlLoader.load(req);
         } catch (error:Error) {
           Alert.show("ERROR: Could not talk to backend at: " + this.backend);
         }
@@ -69,10 +120,14 @@
 
       private function questionReceived(event:Event) :void
       {
-        this.currentQuestionNum = event.target.data.qnum;
-        this.nextQuestion.label = "Skip Question";
-        this.question.text = this.currentQuestionNum + ". " 
-                             + event.target.data.qtext;
+        var finished:Boolean = event.target.data.finished;
+        if (finished) {
+          this.finishSurvey();
+        } else {
+          this.currentQuestionNum = event.target.data.seq;
+          this.question.text = this.currentQuestionNum + ". " 
+                               + event.target.data.text;
+        }
       }
      
       private function netStatusHandler(event:NetStatusEvent) :void
@@ -101,8 +156,7 @@
             Security.showSettings(SecurityPanel.DEFAULT);
           }
          
-          this.camera.setMode(176, 144, 15);
-          this.camera.setKeyFrameInterval(10);
+          this.camera.setMode(400, 300, 15);
           this.camera.setQuality(0, 70);
          
           this.videoDisplay.attachCamera(camera);
@@ -119,41 +173,49 @@
       private function startStopRecord() :void
       {
         if (!recording) {
-          this.nsOutGoing.publish(this.userId + "_" + this.currentQuestionNum, 
-                                  "record");
+          var filename:String = "user" + this.userId 
+                                + "_" + this.currentQuestionNum;
+          this.nsOutGoing.publish(filename, "record");
           this.recording = true;
           this.startstop.label = "Stop Recording";
-          this.nextQuestion.enabled = false;
-          this.nextQuestion.label = "Next Question";
+          this.skipQuestion.enabled = false;
         } else {
           this.nsOutGoing.close();
           this.recording = false;
-          this.startstop.label = "Start Recording";
-          this.nextQuestion.enabled = true;
-          this.preview.enabled = true;
+          this.skipQuestion.enabled = true;
+          this.recorder.visible = false;
+          this.previewer.visible = true;
           this.preview.source = this.server + this.userId + "_" 
                                 + this.currentQuestionNum + ".flv"
-          this.preview.play();
         }
       }
 
-      private function nextQuestion_click() :void
+      private function nextQuestion_click(redo:Boolean = false) :void
       {
         this.startstop.label = "Start Recording";
         this.recording = false;
         this.nsOutGoing.close();
-        this.preview.enabled = false;
+        this.recorder.visible = true;
+        this.previewer.visible = false;
+        this.preview.source = null;
 
-        this.getNextQuestion();
+        if (!redo)
+          this.getNextQuestion();
       }
     ]]>
   </mx:Script>
 
   <mx:HBox id="banner" width="100%" backgroundColor="#336699"
            horizontalAlign="left" paddingLeft="5" paddingTop="5" 
-           paddingBottom="5">
+           paddingBottom="5" verticalAlign="middle">
     <mx:Label id="title" text="SurveyReel" color="white" fontSize="24" 
-              fontWeight="bold" />
+              fontWeight="bold" paddingRight="15"/>
+
+    <mx:Label id="surveyTitle" text="Title" color="white" fontSize="16" 
+              fontWeight="bold" paddingRight="10" />
+
+    <mx:Label id="surveyDescription" text="Description" color="white" 
+              fontSize="16" />
   </mx:HBox>
 
   <mx:VBox id="content" width="100%" height="100%" backgroundColor="#eeeeee"
@@ -162,8 +224,27 @@
               fontSize="24" fontWeight="bold" width="800" paddingTop="20" 
               paddingBottom="20" textAlign="center" />
 
-    <mx:HBox id="players">
-      <mx:VBox id="recorder" horizontalAlign="center">
+    <mx:Canvas id="players">
+      <mx:VBox id="startbox" horizontalAlign="center" visible="false" 
+               x="0" y="0">
+        <mx:Label id="consentTitle" text="Read Carefully!" color="black" 
+                  fontSize="16" />
+
+        <mx:Label id="consentText" text="Please allow this site to access your webcam and microphone." color="black" 
+                  fontSize="12" />
+
+        <mx:Button id="startSurveyBtn" label="Agree and Begin" fontSize="16"
+                   click="startSurvey();" />
+      </mx:VBox>
+
+      <mx:Label id="finished" text="Thank You!" color="black" visible="false" 
+                x="0" y="0" fontSize="30" />
+
+      <mx:VBox id="recorder" horizontalAlign="center" visible="false" 
+               x="0" y="0">
+        <mx:Label id="rec" text="Record your response" color="black" 
+                  fontSize="16" />
+
         <mx:VideoDisplay id="videoDisplay"
           creationComplete="videoDisplay_creationComplete();"
           width="400" height="300" />
@@ -171,16 +252,26 @@
         <mx:HBox id="hbox_RecordControls">
           <mx:Button id="startstop" label="Start Recording" fontSize="16"
                      click="startStopRecord();" />
-          <mx:Button id="nextQuestion" label="Skip Question" fontSize="16"
+          <mx:Button id="skipQuestion" label="Skip Question" fontSize="16"
                      click="nextQuestion_click();" />
         </mx:HBox>
       </mx:VBox>
 
-      <mx:VBox id="previewer" horizontalAlign="center">
-        <s:VideoPlayer id="preview" width="400" height="300" enabled="false" />
-        <mx:Label id="prev" text="Preview" color="black" fontSize="16" />
+      <mx:VBox id="previewer" horizontalAlign="center" visible="false"
+               x="0" y="0">
+        <mx:Label id="prev" text="Preview your response" color="black" 
+                  fontSize="16" />
+
+        <s:VideoPlayer id="preview" width="400" height="325" autoPlay="false" />
+
+        <mx:HBox id="hbox_PreviewControls">
+          <mx:Button id="reRecord" label="Re-Record" fontSize="16"
+                     click="nextQuestion_click(true);" />
+          <mx:Button id="nextQuestion" label="Next Question" fontSize="16"
+                     click="nextQuestion_click();" />
+        </mx:HBox>
       </mx:VBox>
-    </mx:HBox>
+    </mx:Canvas>
      
   </mx:VBox>
 </mx:Application>
