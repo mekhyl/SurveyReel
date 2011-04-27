@@ -23,8 +23,8 @@
       public var mic:Microphone;
       public var nsInComing:NetStream;
       public var nsOutGoing:NetStream;
-      public var server:String = "rtmp://192.168.2.5/oflaDemo/test/";
-      public var backend:String = "http://192.168.2.5/";
+      public var server:String = "rtmp://192.168.2.6/oflaDemo/test/";
+      public var backend:String = "http://192.168.2.6/";
       public var recording:Boolean = false;
       public var currentQuestionNum:int;
       public var surveyId:int;
@@ -32,12 +32,6 @@
 
       private function videoDisplay_creationComplete() :void
       {
-        // Setup the NetConnection for streaming.
-        this.nc = new NetConnection();
-        this.nc.addEventListener(NetStatusEvent.NET_STATUS, 
-                                 this.netStatusHandler, false, 0, true);
-        this.nc.connect(this.server);
-
         // Fetch survey details.
         this.getSurveyDetails();
       }
@@ -51,6 +45,12 @@
         // Fetch the first question.
         this.currentQuestionNum = 0;
         this.getNextQuestion();
+
+        // Setup the NetConnection for streaming.
+        this.nc = new NetConnection();
+        this.nc.addEventListener(NetStatusEvent.NET_STATUS, 
+                                 this.netStatusHandler, false, 0, true);
+        this.nc.connect(this.server);
       }
 
       private function finishSurvey() :void
@@ -59,7 +59,7 @@
 
         this.question.text = "";
         this.recorder.visible = false;
-        this.previewer.visible = false;
+        //this.previewer.visible = false;
         this.finished.visible = true;
       }
 
@@ -178,15 +178,17 @@
           this.nsOutGoing.publish(filename, "record");
           this.recording = true;
           this.startstop.label = "Stop Recording";
-          this.skipQuestion.enabled = false;
+          this.nextQuestion.enabled = false;
+          this.reRecord.enabled = false;
         } else {
           this.nsOutGoing.close();
           this.recording = false;
-          this.skipQuestion.enabled = true;
-          this.recorder.visible = false;
-          this.previewer.visible = true;
-          this.preview.source = this.server + this.userId + "_" 
-                                + this.currentQuestionNum + ".flv"
+          this.nextQuestion.enabled = true;
+          this.reRecord.enabled = true;
+          //this.recorder.visible = false;
+          //this.previewer.visible = true;
+          //this.preview.source = this.server + this.userId + "_" 
+          //                      + this.currentQuestionNum + ".flv"
         }
       }
 
@@ -195,9 +197,9 @@
         this.startstop.label = "Start Recording";
         this.recording = false;
         this.nsOutGoing.close();
-        this.recorder.visible = true;
-        this.previewer.visible = false;
-        this.preview.source = null;
+        //this.recorder.visible = true;
+        //this.previewer.visible = false;
+        //this.preview.source = null;
 
         if (!redo)
           this.getNextQuestion();
@@ -208,7 +210,7 @@
   <mx:HBox id="banner" width="100%" backgroundColor="#336699"
            horizontalAlign="left" paddingLeft="5" paddingTop="5" 
            paddingBottom="5" verticalAlign="middle">
-    <mx:Label id="title" text="SurveyReel" color="white" fontSize="24" 
+    <mx:Label id="title" text="MAYSEVEN" color="white" fontSize="24" 
               fontWeight="bold" paddingRight="15"/>
 
     <mx:Label id="surveyTitle" text="Title" color="white" fontSize="16" 
@@ -227,11 +229,11 @@
     <mx:Canvas id="players">
       <mx:VBox id="startbox" horizontalAlign="center" visible="false" 
                x="0" y="0">
-        <mx:Label id="consentTitle" text="Read Carefully!" color="black" 
-                  fontSize="16" />
+        <mx:Label id="consentTitle" text="Read Carefully Before Starting!" color="black" 
+                  fontSize="22" fontWeight="bold" />
 
-        <mx:Label id="consentText" text="Please allow this site to access your webcam and microphone." color="black" 
-                  fontSize="12" />
+        <mx:Text id="consentText" text="When you click 'Agree and Begin', you will first get a dialog box requesting access to your webcam and microphone. Please select 'Accept' and click 'Close' on the dialog AS QUICKLY AS YOU CAN! This is important. There's an annoying bug with the streaming server that requires this workaround. Also, when you click 'Start Recording' on each question, please wait at least 5 complete seconds before starting to speak." color="black" 
+                 fontSize="16" width="450" />
 
         <mx:Button id="startSurveyBtn" label="Agree and Begin" fontSize="16"
                    click="startSurvey();" />
@@ -252,11 +254,14 @@
         <mx:HBox id="hbox_RecordControls">
           <mx:Button id="startstop" label="Start Recording" fontSize="16"
                      click="startStopRecord();" />
-          <mx:Button id="skipQuestion" label="Skip Question" fontSize="16"
+          <mx:Button id="reRecord" label="Cancel and Redo" fontSize="16"
+                     click="nextQuestion_click(true);" />
+          <mx:Button id="nextQuestion" label="Next Question" fontSize="16"
                      click="nextQuestion_click();" />
         </mx:HBox>
       </mx:VBox>
 
+      <!--
       <mx:VBox id="previewer" horizontalAlign="center" visible="false"
                x="0" y="0">
         <mx:Label id="prev" text="Preview your response" color="black" 
@@ -271,6 +276,8 @@
                      click="nextQuestion_click();" />
         </mx:HBox>
       </mx:VBox>
+      -->
+
     </mx:Canvas>
      
   </mx:VBox>
